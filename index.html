@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kazıyıcı — site içerik analizi</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --text:#e8eaf0; --muted:#8b93a7; --accent:#7c9cff; --accent2:#5b7cf5;
+    --ok:#4cc38a; --warn:#f0b54a; --err:#f06a6a; --r:10px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header.ust{padding:22px 24px 6px;max-width:1200px;margin:auto}
+  h1{margin:0;font-size:22px}
+  header.ust p{margin:4px 0 0;color:var(--muted);font-size:14px}
+  main{max-width:1200px;margin:auto;padding:12px 24px 60px}
+  .kart{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px}
+  .satir{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  input[type=text],input[type=url],input[type=number],select,textarea{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:10px 12px;font:inherit}
+  input[type=url]{flex:1;min-width:260px}
+  input[type=number]{width:72px}
+  textarea{width:100%;min-height:140px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace}
+  button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px 14px;font:inherit;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.ana{background:var(--accent2);border-color:var(--accent2);color:#fff;font-weight:600}
+  button.ana:hover{background:var(--accent)}
+  button:disabled{opacity:.5;cursor:default}
+  label{color:var(--muted);font-size:14px;display:inline-flex;gap:6px;align-items:center}
+  details summary{cursor:pointer;color:var(--muted);font-size:14px;margin-top:10px}
+  .ayarlar{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 18px;margin-top:12px}
+  #durum{font-size:13px;color:var(--muted);margin-top:10px;min-height:20px}
+  #durum.hata{color:var(--err)}
+  .ilerleme{height:6px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-top:8px;display:none}
+  .ilerleme div{height:100%;width:0;background:var(--accent);transition:width .2s}
+  #log{max-height:110px;overflow:auto;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--muted);margin-top:8px;white-space:pre-wrap}
+  .sekmeler{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:14px}
+  .sekme{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;padding:10px 12px;color:var(--muted)}
+  .sekme.aktif{color:var(--text);border-bottom-color:var(--accent)}
+  .sekme .say{background:var(--panel2);border-radius:20px;padding:1px 8px;margin-left:6px;font-size:12px}
+  .not{font-size:13px;color:var(--muted)}
+  .not code{background:var(--panel2);padding:1px 5px;border-radius:4px}
+  .bos{color:var(--muted);text-align:center;padding:40px 0}
+
+  /* galeri */
+  .izgara{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+  .izgara.liste{grid-template-columns:1fr}
+  .oge{background:var(--panel2);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+  .liste .oge{flex-direction:row;align-items:center}
+  .oge .onizleme{height:130px;background:#0b0d11;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:28px;cursor:zoom-in}
+  .liste .onizleme{width:110px;height:70px;flex:none}
+  .oge .onizleme img,.oge .onizleme video{max-width:100%;max-height:100%;object-fit:contain}
+  .oge .bilgi{padding:8px;font-size:12px;color:var(--muted);word-break:break-all}
+  .oge .bilgi a{color:var(--accent);text-decoration:none}
+  .oge .ad{color:var(--text);display:block;margin-bottom:2px;max-height:34px;overflow:hidden}
+  .yazi-sayfa{background:var(--panel2);border:1px solid var(--line);border-radius:8px;margin-bottom:10px}
+  .yazi-sayfa .bas{display:flex;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}
+  .yazi-sayfa .bas b{flex:1;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .yazi-sayfa pre{margin:0;padding:12px;max-height:340px;overflow:auto;white-space:pre-wrap;font:13px/1.55 ui-monospace,Menlo,Consolas,monospace;color:#cfd4e0}
+  #buyuk{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:9;cursor:zoom-out}
+  #buyuk img,#buyuk video{max-width:92vw;max-height:90vh}
+
+  /* analiz */
+  .ozet{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px}
+  .ozet div{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px}
+  .ozet b{display:block;font-size:24px;font-variant-numeric:tabular-nums}
+  .ozet span{color:var(--muted);font-size:13px}
+  .bolum{margin:22px 0 8px;font-size:17px;display:flex;align-items:center;gap:10px}
+  .bolum small{color:var(--muted);font-weight:400;font-size:13px}
+  .iki{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+  .kutu{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px}
+  .kutu h3{margin:0 0 10px;font-size:14px;color:var(--muted);font-weight:600}
+  .cubuk{display:grid;grid-template-columns:minmax(80px,38%) 1fr auto;gap:8px;align-items:center;font-size:13px;margin:4px 0}
+  .cubuk .et{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cubuk .yol{height:10px;background:#11141a;border-radius:5px;overflow:hidden}
+  .cubuk .yol i{display:block;height:100%;background:var(--accent);border-radius:5px}
+  .cubuk .d{color:var(--muted);font-variant-numeric:tabular-nums;min-width:38px;text-align:right}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .iyi{color:var(--ok)} .uyari{color:var(--warn)} .kotu{color:var(--err)}
+  .anahat{font-size:13px;margin:0;padding:0;list-style:none}
+  .anahat li{padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .anahat .lv{display:inline-block;min-width:26px;color:var(--muted);font:11px ui-monospace,Menlo,monospace}
+  .rozet{display:inline-block;font-size:12px;padding:1px 8px;border-radius:20px;background:#11141a;margin:2px 4px 2px 0}
+  .kaydir{max-height:320px;overflow:auto}
+  a.ince{color:var(--accent);text-decoration:none;word-break:break-all}
+</style>
+</head>
+<body>
+<header class="ust">
+  <h1>Kazıyıcı</h1>
+  <p>Bir sitenin adresini yaz; yazıları, fotoğrafları, videoları, sesleri ve belgeleri topla, sonra metin, medya, SEO ve bağlantı analizini gör.</p>
+</header>
+<main>
+  <section class="kart">
+    <form id="form" class="satir">
+      <input id="url" type="url" placeholder="https://ornek.com/sayfa" required>
+      <button class="ana" id="getir" type="submit">Getir ve analiz et</button>
+      <button type="button" id="durdur" disabled>Durdur</button>
+    </form>
+    <details>
+      <summary>Ayarlar</summary>
+      <div class="ayarlar">
+        <label><input type="checkbox" id="gez"> Aynı sitedeki bağlantıları da gez</label>
+        <label>En fazla <input type="number" id="maxSayfa" value="10" min="1" max="500"> sayfa</label>
+        <label>Sayfalar arası bekleme <input type="number" id="bekleme" value="700" min="0" step="100"> ms</label>
+        <label>Aracı (CORS proxy)
+          <select id="proxy">
+            <option value="oto">Otomatik (sırayla dene)</option>
+            <option value="dogrudan">Doğrudan (proxy yok)</option>
+            <option value="allorigins">allorigins.win</option>
+            <option value="corsproxy">corsproxy.io</option>
+            <option value="codetabs">codetabs.com</option>
+            <option value="ozel">Kendi proxy'm…</option>
+          </select>
+        </label>
+        <label id="ozelSatir" style="display:none">Proxy önek <input type="text" id="ozelProxy" placeholder="https://proxym.com/?url=" style="flex:1"></label>
+      </div>
+      <p class="not">Tarayıcılar bir sayfanın başka sitelerden veri çekmesine izin vermez (CORS), bu yüzden istekler açık bir aracı sunucudan geçer. Aracılar ücretsizdir ve bazen yavaş kalır; biri çalışmazsa “Otomatik” sıradakini dener.</p>
+    </details>
+    <details>
+      <summary>Ya da sayfanın HTML'ini yapıştır / kaydedilmiş sayfayı yükle</summary>
+      <p class="not">Aracıyı engelleyen sitelerde: sayfayı tarayıcında aç, <code>Ctrl+S</code> ile kaydet ve .html dosyasını yükle, ya da <code>Ctrl+U</code> ile kaynağı kopyalayıp yapıştır.</p>
+      <div class="satir" style="margin-bottom:8px">
+        <input type="file" id="dosya" accept=".html,.htm,text/html">
+        <input type="url" id="tabanUrl" placeholder="Sayfanın asıl adresi (isteğe bağlı)">
+      </div>
+      <textarea id="yapistir" placeholder="<html>…</html>"></textarea>
+      <div class="satir" style="margin-top:8px"><button type="button" id="yapistirIsle">Yapıştırılanı analiz et</button></div>
+    </details>
+    <div id="durum"></div>
+    <div class="ilerleme" id="ilerleme"><div></div></div>
+    <div id="log"></div>
+  </section>
+
+  <section class="kart" id="sonuc" style="display:none">
+    <nav class="sekmeler" id="sekmeler"></nav>
+    <div id="icerik"></div>
+  </section>
+</main>
+<div id="buyuk"></div>
+
+<script>
+"use strict";
+// ================================================================ sabitler
+const SEKMELER = {
+  analiz:      {ad:"Analiz",      ikon:"📊"},
+  yazilar:     {ad:"Yazılar",     ikon:"📝"},
+  fotograflar: {ad:"Fotoğraflar", ikon:"🖼️"},
+  videolar:    {ad:"Videolar",    ikon:"🎬"},
+  sesler:      {ad:"Sesler",      ikon:"🎵"},
+  belgeler:    {ad:"Belgeler",    ikon:"📄"},
+  gomulu:      {ad:"Gömülü",      ikon:"🔗"},
+};
+const MEDYA_TURLERI = ["fotograflar","videolar","sesler","belgeler"];
+const UZ = {
+  fotograflar:["jpg","jpeg","png","gif","webp","svg","bmp","avif","ico","tif","tiff","heic"],
+  videolar:["mp4","webm","mov","m4v","mkv","avi","ogv","m3u8"],
+  sesler:["mp3","wav","ogg","oga","m4a","aac","flac","opus"],
+  belgeler:["pdf","doc","docx","xls","xlsx","ppt","pptx","odt","ods","csv","zip","rar","7z","epub"],
+};
+const PROXYLER = {
+  allorigins: u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+  corsproxy:  u => "https://corsproxy.io/?url=" + encodeURIComponent(u),
+  codetabs:   u => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u),
+};
+const DURAK = new Set(("ve veya ile bir bu şu o da de ki mi mı mu mü için gibi kadar çok daha en her hem ama fakat ancak ise ne nasıl neden niye olan olarak olduğu olur oldu olan olmak var yok değil diye sonra önce göre karşı bazı tüm bütün hiç şey şeyi şekilde ben sen biz siz onlar bunu bunun buna şunu onu onun ona bizim sizin benim senin çünkü yani ayrıca yine artık sadece bile zaten hep böyle şöyle öyle burada orada içinde üzerinde arasında tarafından ilgili kendi kendini aynı birlikte ya veya da yada şimdi daha olarak gibi değildir ediyor eden etmek etti yapılan yapmak " +
+  "the a an and or of to in on for is are was were be been with as by at it its this that these those from not but have has had you your we our they their he she his her them i me my can will would should could about into than then there here what which who when where how all any more most other some such no yes do does did just also only over after before up out if so").split(/\s+/));
+
+// ================================================================ durum
+const S = { sayfalar:[], medya:new Map(), sekme:"analiz", iptal:false, calisanProxy:null, kaynak:"" };
+const $ = id => document.getElementById(id);
+function durum(m, hata=false){ const d=$("durum"); d.textContent=m; d.className=hata?"hata":""; }
+function logla(m){ const l=$("log"); l.textContent += m + "\n"; l.scrollTop = l.scrollHeight; }
+function ilerleme(oran){ const b=$("ilerleme"); if(oran==null){b.style.display="none";return;} b.style.display="block"; b.firstElementChild.style.width=(Math.min(1,oran)*100).toFixed(1)+"%"; }
+const bekle = ms => new Promise(r=>setTimeout(r,ms));
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const sayi = n => (n||0).toLocaleString("tr-TR");
+function boyutYaz(b){ if(b==null) return "—"; if(b<1024) return b+" B"; if(b<1048576) return (b/1024).toFixed(1)+" KB"; return (b/1048576).toFixed(2)+" MB"; }
+function dosyaAdi(u){ try{ return decodeURIComponent(new URL(u).pathname.split("/").filter(Boolean).pop()||new URL(u).host); }catch{ return u; } }
+function hostAl(u){ try{ return new URL(u).host.replace(/^www\./,""); }catch{ return ""; } }
+
+// ================================================================ ağ
+function proxySirasi(){
+  const sec = $("proxy").value;
+  if (sec === "dogrudan" || sec === "ozel") return [sec];
+  if (sec !== "oto") return [sec];
+  const sira = ["dogrudan","allorigins","corsproxy","codetabs"];
+  if (S.calisanProxy) { sira.splice(sira.indexOf(S.calisanProxy),1); sira.unshift(S.calisanProxy); }
+  return sira;
+}
+function proxyUrl(ad, u){
+  if (ad === "dogrudan") return u;
+  if (ad === "ozel") return ($("ozelProxy").value || "") + encodeURIComponent(u);
+  return PROXYLER[ad](u);
+}
+async function getir(u, tur){
+  let sonHata;
+  for (const ad of proxySirasi()){
+    try{
+      const ctrl = new AbortController(); const t = setTimeout(()=>ctrl.abort(), 30000);
+      const y = await fetch(proxyUrl(ad,u), {signal:ctrl.signal, credentials:"omit"});
+      clearTimeout(t);
+      if (!y.ok) throw new Error("HTTP " + y.status);
+      const veri = tur === "text" ? await y.text() : await y.blob();
+      S.calisanProxy = ad;
+      return {veri, tip:y.headers.get("content-type")||""};
+    }catch(e){ sonHata = e; }
+  }
+  throw new Error(sonHata && sonHata.name==="AbortError" ? "zaman aşımı" : (sonHata && sonHata.message || "bilinmeyen hata"));
+}
+
+// ================================================================ ayrıştırma
+function uzanti(u){ try{ const m=new URL(u).pathname.toLowerCase().match(/\.([a-z0-9]{2,5})$/); return m?m[1]:""; }catch{ return ""; } }
+function katUzantidan(u){ const e=uzanti(u); for(const k in UZ) if(UZ[k].includes(e)) return k; return null; }
+function katMimeden(m){ m=(m||"").split(";")[0].trim().toLowerCase();
+  if(m.startsWith("image/"))return"fotograflar"; if(m.startsWith("video/"))return"videolar"; if(m.startsWith("audio/"))return"sesler";
+  if(/pdf|zip|msword|officedocument|csv|epub/.test(m))return"belgeler"; return null; }
+function coz(a, taban){
+  if(!a) return null; a=a.trim();
+  if(!a || /^(data:|blob:|javascript:|mailto:|tel:|#)/i.test(a)) return null;
+  try{ const u=new URL(a, taban); u.hash=""; return /^https?:$/.test(u.protocol)?u.href:null; }catch{ return null; }
+}
+const srcset = v => (v||"").split(",").map(s=>s.trim().split(/\s+/)[0]).filter(Boolean);
+const CSS_URL = /url\(\s*['"]?([^'")]+)['"]?\s*\)/g;
+
+function medyaTopla(doc, taban, sayfaUrl){
+  const ekle = (a, varsayilan) => {
+    const u = coz(a, taban); if(!u) return;
+    const kat = katUzantidan(u) || varsayilan; if(!kat) return;
+    const m = S.medya.get(u);
+    if (m) { m.sayfalar.add(sayfaUrl); return; }
+    S.medya.set(u, {url:u, kat, sayfalar:new Set([sayfaUrl]), en:0, boy:0, bayt:null, bicim:uzanti(u)});
+  };
+  doc.querySelectorAll("img").forEach(img=>{
+    ["src","data-src","data-original","data-lazy-src","data-url","data-full","data-hi-res"].forEach(o=>ekle(img.getAttribute(o),"fotograflar"));
+    ["srcset","data-srcset"].forEach(o=>srcset(img.getAttribute(o)).forEach(a=>ekle(a,"fotograflar")));
+  });
+  doc.querySelectorAll("picture source").forEach(s=>{ srcset(s.getAttribute("srcset")).forEach(a=>ekle(a,"fotograflar")); ekle(s.getAttribute("src"),"fotograflar"); });
+  doc.querySelectorAll("video").forEach(v=>{ ekle(v.getAttribute("src"),"videolar"); ekle(v.getAttribute("poster"),"fotograflar"); v.querySelectorAll("source").forEach(s=>ekle(s.getAttribute("src"),"videolar")); });
+  doc.querySelectorAll("audio").forEach(v=>{ ekle(v.getAttribute("src"),"sesler"); v.querySelectorAll("source").forEach(s=>ekle(s.getAttribute("src"),"sesler")); });
+  doc.querySelectorAll("meta").forEach(m=>{
+    const p=(m.getAttribute("property")||m.getAttribute("name")||"").toLowerCase();
+    if(/^(og:image(:url|:secure_url)?|twitter:image(:src)?)$/.test(p)) ekle(m.getAttribute("content"),"fotograflar");
+    if(/^(og:video(:url|:secure_url)?|twitter:player:stream)$/.test(p)) ekle(m.getAttribute("content"),"videolar");
+    if(/^og:audio/.test(p)) ekle(m.getAttribute("content"),"sesler");
+  });
+  doc.querySelectorAll("link[rel]").forEach(l=>{ if(/icon|image_src/i.test(l.getAttribute("rel"))) ekle(l.getAttribute("href"),"fotograflar"); });
+  doc.querySelectorAll("[style]").forEach(el=>{ for(const m of el.getAttribute("style").matchAll(CSS_URL)) ekle(m[1],"fotograflar"); });
+  doc.querySelectorAll("style").forEach(st=>{ for(const m of st.textContent.matchAll(CSS_URL)) ekle(m[1], null); });
+  doc.querySelectorAll("a[href]").forEach(a=>ekle(a.getAttribute("href"), null));
+  doc.querySelectorAll("iframe[src]").forEach(f=>{
+    const u=coz(f.getAttribute("src"),taban);
+    if(u && /youtube|youtu\.be|vimeo|dailymotion|soundcloud|spotify|instagram|tiktok|twitter|x\.com|google\.com\/maps/.test(u) && !S.medya.has(u))
+      S.medya.set(u,{url:u,kat:"gomulu",sayfalar:new Set([sayfaUrl]),bicim:hostAl(u)});
+  });
+}
+
+function yaziCikar(doc, url){
+  const kopya = doc.cloneNode(true);
+  kopya.querySelectorAll("script,style,noscript,template,svg,iframe,canvas").forEach(e=>e.remove());
+  const baslik = (kopya.querySelector("title")?.textContent || "").trim();
+  const md = ["# " + (baslik || url), "_Kaynak: " + url + "_", ""];
+  const govde = kopya.body || kopya.documentElement;
+  govde.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li,blockquote,pre,figcaption,td,th,dt,dd").forEach(el=>{
+    if (el.tagName!=="LI" && el.parentElement && el.parentElement.closest("p,li,blockquote,pre,figcaption,td,th,dd")) return;
+    const t = el.tagName.toLowerCase();
+    if (t === "pre"){ md.push("```\n" + el.textContent.trimEnd() + "\n```", ""); return; }
+    const metin = el.textContent.replace(/\s+/g," ").trim(); if(!metin) return;
+    if (/^h\d$/.test(t)) md.push("#".repeat(+t[1]) + " " + metin);
+    else if (t === "li") md.push("- " + metin);
+    else if (t === "blockquote") md.push("> " + metin);
+    else md.push(metin);
+    md.push("");
+  });
+  // blok öğelerin arasına satır sonu koyarak düz metin üret
+  govde.querySelectorAll("br").forEach(b=>b.replaceWith("\n"));
+  govde.querySelectorAll("p,div,li,h1,h2,h3,h4,h5,h6,tr,section,article,header,footer,blockquote,pre,dt,dd,figcaption").forEach(b=>b.append("\n"));
+  const duz = govde.textContent.split("\n").map(s=>s.replace(/\s+/g," ").trim()).filter(Boolean).join("\n");
+  return {baslik, md: md.join("\n"), duz};
+}
+
+function seoCikar(doc, url, htmlBoy){
+  const meta = n => doc.querySelector(`meta[name="${n}" i]`)?.getAttribute("content")?.trim() || "";
+  const title = (doc.querySelector("title")?.textContent || "").replace(/\s+/g," ").trim();
+  const basliklar = [...doc.querySelectorAll("h1,h2,h3,h4,h5,h6")].map(h=>({lv:+h.tagName[1], t:h.textContent.replace(/\s+/g," ").trim()})).filter(h=>h.t);
+  const atlamalar = []; let onceki = 0;
+  basliklar.forEach(h=>{ if (onceki && h.lv > onceki+1) atlamalar.push(`H${onceki} → H${h.lv}`); onceki = h.lv; });
+  const imgs = [...doc.querySelectorAll("img")];
+  const altsiz = imgs.filter(i=>!i.hasAttribute("alt")).map(i=>i.getAttribute("src")||i.getAttribute("data-src")||"(src yok)");
+  const bosAlt = imgs.filter(i=>i.hasAttribute("alt") && !i.getAttribute("alt").trim()).length;
+  const og = [...doc.querySelectorAll('meta[property^="og:"]')].map(m=>m.getAttribute("property"));
+  const etiketsizGirdi = [...doc.querySelectorAll("input:not([type=hidden]):not([type=submit]):not([type=button]),select,textarea")].filter(el=>{
+    if (el.getAttribute("aria-label") || el.getAttribute("aria-labelledby") || el.closest("label")) return false;
+    return !(el.id && doc.querySelector(`label[for="${CSS.escape(el.id)}"]`));
+  }).length;
+  return {
+    title, titleBoy:[...title].length, aciklama:meta("description"), aciklamaBoy:[...meta("description")].length,
+    h1:basliklar.filter(h=>h.lv===1).length, basliklar, atlamalar,
+    imgToplam:imgs.length, altsiz, bosAlt,
+    lang: doc.documentElement.getAttribute("lang") || "",
+    viewport: !!doc.querySelector('meta[name="viewport" i]'),
+    canonical: doc.querySelector('link[rel="canonical" i]')?.getAttribute("href") || "",
+    robots: meta("robots"), og, twitterKart: !!doc.querySelector('meta[name="twitter:card" i]'),
+    jsonLd: doc.querySelectorAll('script[type="application/ld+json"]').length,
+    etiketsizGirdi, htmlBoy,
+  };
+}
+
+function linkCikar(doc, taban, url){
+  const host = hostAl(url), ic=[], dis=[];
+  let nofollow=0, bosMetin=0, mailto=0, tel=0, yeniSekme=0, guvensizYeniSekme=0;
+  doc.querySelectorAll("a[href]").forEach(a=>{
+    const h = a.getAttribute("href").trim();
+    if (/^mailto:/i.test(h)) { mailto++; return; }
+    if (/^tel:/i.test(h)) { tel++; return; }
+    if (/^(javascript:|#)/i.test(h) || !h) return;
+    const u = coz(h, taban); if (!u) return;
+    const metin = (a.textContent || "").trim() || a.getAttribute("aria-label") || a.querySelector("img[alt]")?.getAttribute("alt") || "";
+    if (!metin.trim()) bosMetin++;
+    const rel = (a.getAttribute("rel")||"").toLowerCase();
+    if (rel.includes("nofollow")) nofollow++;
+    if (a.getAttribute("target")==="_blank"){ yeniSekme++; if(!/noopener|noreferrer/.test(rel)) guvensizYeniSekme++; }
+    (hostAl(u) === host ? ic : dis).push({u, metin:metin.replace(/\s+/g," ").trim().slice(0,80)});
+  });
+  return {ic, dis, nofollow, bosMetin, mailto, tel, yeniSekme, guvensizYeniSekme};
+}
+
+function sayfaIsle(html, url){
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const baseEl = doc.querySelector("base[href]");
+  const taban = baseEl ? (coz(baseEl.getAttribute("href"), url) || url) : url;
+  const once = S.medya.size;
+  medyaTopla(doc, taban, url);
+  const seo = seoCikar(doc, url, new Blob([html]).size);
+  const linkler = linkCikar(doc, taban, url);
+  const y = yaziCikar(doc, url);
+  S.sayfalar.push({url, ...y, seo, linkler});
+  logla(`✓ ${url}  (+${S.medya.size-once} medya)`);
+  return linkler.ic.map(l=>l.u).filter(u=>!katUzantidan(u));
+}
+
+// ================================================================ akış
+async function baslat(e){
+  e.preventDefault();
+  let u = $("url").value.trim(); if(!u) return;
+  if(!/^https?:\/\//i.test(u)) u = "https://" + u;
+  sifirla(); S.kaynak = u; kilitle(true);
+  const gez = $("gez").checked, maks = Math.max(1, +$("maxSayfa").value||1), bek = +$("bekleme").value||0;
+  const kuyruk=[u], gorulen=new Set([u]); let n=0;
+  try{
+    while(kuyruk.length && n<maks && !S.iptal){
+      const s = kuyruk.shift(); n++;
+      durum(`Sayfa alınıyor (${n}/${gez?maks:1}): ${s}`); ilerleme(n/(gez?maks:1));
+      try{
+        const {veri, tip} = await getir(s, "text");
+        if (tip && !/html|xml|text\/plain/.test(tip)) {
+          const kat = katMimeden(tip) || katUzantidan(s);
+          if (kat) S.medya.set(s,{url:s,kat,sayfalar:new Set([s]),en:0,boy:0,bayt:null,bicim:uzanti(s)});
+          continue;
+        }
+        const yeni = sayfaIsle(veri, s);
+        if (gez) yeni.forEach(l=>{ const t=l.replace(/\/$/,""); if(!gorulen.has(l) && !gorulen.has(t)){ gorulen.add(l); kuyruk.push(l); } });
+      }catch(err){ logla(`✗ ${s}: ${err.message}`); if(n===1) throw err; }
+      if (!gez) break;
+      if (kuyruk.length && bek) await bekle(bek);
+    }
+    durum(`${S.sayfalar.length} sayfa, ${S.medya.size} medya bulundu. Görsel ölçüleri okunuyor…` + (S.iptal?" (durduruldu)":""));
+  }catch(err){
+    durum("Sayfa alınamadı: " + err.message + ". Aracıyı değiştirmeyi ya da HTML yapıştırmayı dene.", true);
+  }finally{ kilitle(false); ilerleme(null); S.sekme="analiz"; goster(); olculeriOku(); }
+}
+
+function yapistirIsle(){
+  const html = $("yapistir").value; if(!html.trim()) { durum("Önce HTML yapıştır ya da dosya yükle.", true); return; }
+  sifirla();
+  let taban = $("tabanUrl").value.trim();
+  if (!taban){
+    const m = html.match(/saved from url=\(\d+\)(\S+?)\s*-->/i) || html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)/i) || html.match(/property=["']og:url["'][^>]+content=["']([^"']+)/i);
+    taban = m ? m[1] : "https://yapistirilan.sayfa/";
+  }
+  S.kaynak = taban;
+  try{ sayfaIsle(html, taban); durum(`${S.medya.size} medya bulundu.`); }catch(e){ durum("İşlenemedi: "+e.message, true); }
+  S.sekme="analiz"; goster(); olculeriOku();
+}
+
+function sifirla(){ S.sayfalar=[]; S.medya.clear(); S.iptal=false; $("log").textContent=""; }
+function kilitle(v){ $("getir").disabled=v; $("durdur").disabled=!v; }
+
+// görsellerin piksel ölçülerini (CORS gerekmeden) oku
+async function olculeriOku(){
+  const fotolar = [...S.medya.values()].filter(m=>m.kat==="fotograflar" && !m.en);
+  let i = 0;
+  await Promise.all(Array.from({length:6}, async () => {
+    while (i < fotolar.length) {
+      const m = fotolar[i++];
+      await new Promise(r=>{
+        const img = new Image(); img.referrerPolicy = "no-referrer";
+        const t = setTimeout(()=>{ img.src=""; r(); }, 12000);
+        img.onload = () => { clearTimeout(t); m.en = img.naturalWidth; m.boy = img.naturalHeight; r(); };
+        img.onerror = () => { clearTimeout(t); m.hata = true; r(); };
+        img.src = m.url;
+      });
+    }
+  }));
+  if (fotolar.length) durum(`${S.sayfalar.length} sayfa, ${S.medya.size} medya analiz edildi.`);
+  if (S.sekme==="analiz" || S.sekme==="fotograflar") ciz();
+}
+
+// dosya boyutlarını ölç (isteğe bağlı, proxy üzerinden indirip byte sayar, saklamaz)
+async function boyutlariOlc(dugme){
+  const liste = [...S.medya.values()].filter(m=>m.kat!=="gomulu" && m.bayt==null);
+  if (!liste.length) return;
+  dugme.disabled = true; S.iptal=false; $("durdur").disabled=false;
+  let bitti=0, i=0; const toplam=liste.length;
+  await Promise.all(Array.from({length:4}, async () => {
+    while (i < liste.length && !S.iptal) {
+      const m = liste[i++];
+      try { const {veri, tip} = await getir(m.url, "blob"); m.bayt = veri.size; m.mime = (tip||"").split(";")[0];
+        if (!m.bicim && m.mime) m.bicim = m.mime.split("/")[1]; }
+      catch { m.bayt = -1; }
+      bitti++; ilerleme(bitti/toplam); durum(`Boyutlar ölçülüyor ${bitti}/${toplam}…`);
+    }
+  }));
+  ilerleme(null); $("durdur").disabled=true; durum("Boyut ölçümü tamamlandı."); ciz();
+}
+
+// ================================================================ analiz hesapları
+function kelimeler(metin){ return (metin.toLocaleLowerCase("tr").match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || []).map(k=>k.replace(/['’].*$/,"")); }
+function metinAnalizi(){
+  const tum = S.sayfalar.map(s=>s.duz).join("\n");
+  const k = kelimeler(tum);
+  const frek = new Map(), ikili = new Map();
+  let onceki = null;
+  for (const w of k){
+    const anlamli = w.length > 2 && !DURAK.has(w) && !/^\d+$/.test(w);
+    if (anlamli) frek.set(w, (frek.get(w)||0)+1);
+    if (anlamli && onceki) { const b = onceki+" "+w; ikili.set(b, (ikili.get(b)||0)+1); }
+    onceki = anlamli ? w : null;
+  }
+  const cumleler = tum.split(/(?<=[.!?…])\s+|\n+/).map(s=>s.trim()).filter(s=>kelimeler(s).length>=3);
+  const sirala = m => [...m.entries()].sort((a,b)=>b[1]-a[1]);
+  return {
+    kelime:k.length, benzersiz:new Set(k).size, karakter:tum.replace(/\s/g,"").length,
+    cumle:cumleler.length, ortCumle: cumleler.length ? k.length/cumleler.length : 0,
+    okuma: Math.max(1, Math.round(k.length/200)),
+    enSik: sirala(frek).slice(0,20), ikili: sirala(ikili).filter(([,n])=>n>1).slice(0,12),
+    sayfaBasina: S.sayfalar.map(s=>({url:s.url, baslik:s.baslik, kelime:kelimeler(s.duz).length})),
+  };
+}
+function medyaAnalizi(){
+  const tum = [...S.medya.values()].filter(m=>m.kat!=="gomulu");
+  const tur = {}, bicim = {};
+  tum.forEach(m=>{ tur[m.kat]=(tur[m.kat]||0)+1; const b=(m.bicim||"bilinmiyor").toUpperCase(); bicim[b]=(bicim[b]||0)+1; });
+  const fotolar = tum.filter(m=>m.kat==="fotograflar");
+  const olculen = fotolar.filter(m=>m.en);
+  const aralik = [["< 100 px",0,100],["100–499",100,500],["500–999",500,1000],["1000–1999",1000,2000],["2000+",2000,1e9]]
+    .map(([ad,a,b])=>[ad, olculen.filter(m=>Math.max(m.en,m.boy)>=a && Math.max(m.en,m.boy)<b).length]);
+  const yon = {yatay:0, dikey:0, kare:0};
+  olculen.forEach(m=>{ const r=m.en/m.boy; if (r>1.1) yon.yatay++; else if (r<0.9) yon.dikey++; else yon.kare++; });
+  const boyutlu = tum.filter(m=>m.bayt>0);
+  return {
+    toplam:tum.length, tur, bicim:Object.entries(bicim).sort((a,b)=>b[1]-a[1]),
+    olculen:olculen.length, foto:fotolar.length, kirik:fotolar.filter(m=>m.hata).length, aralik, yon,
+    enBuyukCoz: [...olculen].sort((a,b)=>b.en*b.boy-a.en*a.boy).slice(0,5),
+    boyutlu, toplamBayt: boyutlu.reduce((a,m)=>a+m.bayt,0),
+    enAgir: [...boyutlu].sort((a,b)=>b.bayt-a.bayt).slice(0,10),
+    olculmedi: tum.filter(m=>m.bayt==null).length, olcumHata: tum.filter(m=>m.bayt===-1).length,
+    gomulu: [...S.medya.values()].filter(m=>m.kat==="gomulu"),
+    ortak: tum.filter(m=>m.sayfalar.size>1).length,
+  };
+}
+function linkAnalizi(){
+  const ic=new Map(), dis=new Map(), alan=new Map(); let t={nofollow:0,bosMetin:0,mailto:0,tel:0,yeniSekme:0,guvensizYeniSekme:0,icToplam:0,disToplam:0};
+  S.sayfalar.forEach(s=>{
+    const l=s.linkler;
+    ["nofollow","bosMetin","mailto","tel","yeniSekme","guvensizYeniSekme"].forEach(k=>t[k]+=l[k]);
+    t.icToplam += l.ic.length; t.disToplam += l.dis.length;
+    l.ic.forEach(x=>ic.set(x.u,(ic.get(x.u)||0)+1));
+    l.dis.forEach(x=>{ dis.set(x.u,(dis.get(x.u)||0)+1); const h=hostAl(x.u); alan.set(h,(alan.get(h)||0)+1); });
+  });
+  const sirala = m => [...m.entries()].sort((a,b)=>b[1]-a[1]);
+  return {...t, icBenzersiz:ic.size, disBenzersiz:dis.size, alanlar:sirala(alan).slice(0,15), enCokIc:sirala(ic).slice(0,10), disListe:sirala(dis)};
+}
+function seoPuan(s){
+  const k = []; // [durum, mesaj]  durum: iyi | uyari | kotu
+  const e = (d,m)=>k.push([d,m]);
+  if (!s.title) e("kotu","Başlık (title) yok"); else if (s.titleBoy<30||s.titleBoy>60) e("uyari",`Başlık ${s.titleBoy} karakter (30–60 önerilir)`); else e("iyi",`Başlık ${s.titleBoy} karakter`);
+  if (!s.aciklama) e("kotu","Meta açıklama yok"); else if (s.aciklamaBoy<70||s.aciklamaBoy>160) e("uyari",`Meta açıklama ${s.aciklamaBoy} karakter (70–160 önerilir)`); else e("iyi",`Meta açıklama ${s.aciklamaBoy} karakter`);
+  if (s.h1===0) e("kotu","H1 başlık yok"); else if (s.h1>1) e("uyari",`${s.h1} adet H1 var (1 önerilir)`); else e("iyi","Tek H1");
+  if (s.atlamalar.length) e("uyari",`Başlık seviyesi atlanıyor: ${[...new Set(s.atlamalar)].join(", ")}`); else if (s.basliklar.length) e("iyi","Başlık hiyerarşisi düzgün");
+  if (s.imgToplam){ if (s.altsiz.length) e("kotu",`${s.altsiz.length}/${s.imgToplam} görselde alt metni yok`); else e("iyi","Tüm görsellerde alt özelliği var"); }
+  if (s.bosAlt) e("uyari",`${s.bosAlt} görselde alt boş (süs görseli değilse doldurulmalı)`);
+  e(s.lang?"iyi":"kotu", s.lang?`Dil: ${s.lang}`:"html lang özelliği yok (ekran okuyucular için gerekli)");
+  e(s.viewport?"iyi":"kotu", s.viewport?"Mobil viewport var":"Mobil viewport etiketi yok");
+  e(s.canonical?"iyi":"uyari", s.canonical?"Canonical adres tanımlı":"Canonical adres yok");
+  e(s.og.length>=3?"iyi":"uyari", s.og.length?`Open Graph: ${s.og.length} etiket`:"Open Graph etiketleri yok (paylaşım önizlemesi zayıf)");
+  if (s.etiketsizGirdi) e("kotu",`${s.etiketsizGirdi} form alanının etiketi (label) yok`);
+  if (/noindex/i.test(s.robots)) e("uyari","Sayfa noindex — arama motorlarında çıkmaz");
+  if (s.jsonLd) e("iyi",`Yapılandırılmış veri (JSON-LD): ${s.jsonLd}`);
+  const puan = Math.round(100 * k.reduce((a,[d])=>a+(d==="iyi"?1:d==="uyari"?.5:0),0) / k.length);
+  return {puan, k};
+}
+
+// ================================================================ çizim yardımcıları
+function cubuklar(dizi, birim=""){
+  if (!dizi.length) return '<div class="not">Veri yok.</div>';
+  const maks = Math.max(...dizi.map(d=>d[1])) || 1;
+  return dizi.map(([et,n])=>`<div class="cubuk"><span class="et" title="${esc(et)}">${esc(et)}</span><span class="yol"><i style="width:${(n/maks*100).toFixed(1)}%"></i></span><span class="d">${typeof n==="number"&&birim==="B"?boyutYaz(n):sayi(n)}</span></div>`).join("");
+}
+const ikonDurum = d => d==="iyi" ? '<span class="iyi">✓</span>' : d==="uyari" ? '<span class="uyari">!</span>' : '<span class="kotu">✗</span>';
+const puanRenk = p => p>=80?"iyi":p>=55?"uyari":"kotu";
+
+// ================================================================ arayüz
+function sayac(){
+  const c = {analiz:"", yazilar:S.sayfalar.length}; MEDYA_TURLERI.concat("gomulu").forEach(k=>c[k]=0);
+  S.medya.forEach(m=>c[m.kat]++); return c;
+}
+function goster(){
+  $("sonuc").style.display = S.sayfalar.length||S.medya.size ? "block" : "none";
+  const c = sayac();
+  $("sekmeler").innerHTML = Object.entries(SEKMELER).filter(([k])=>k==="analiz"||k==="yazilar"||c[k]>0)
+    .map(([k,v])=>`<button class="sekme ${k===S.sekme?"aktif":""}" data-k="${k}">${v.ikon} ${v.ad}${k!=="analiz"?`<span class="say">${c[k]}</span>`:""}</button>`).join("");
+  ciz();
+}
+function ciz(){
+  const ic = $("icerik");
+  if (S.sekme==="analiz") { ic.innerHTML = analizHtml(); return; }
+  if (S.sekme==="yazilar"){
+    ic.innerHTML = S.sayfalar.length ? S.sayfalar.map((s,i)=>`
+      <div class="yazi-sayfa"><div class="bas"><b title="${esc(s.url)}">${esc(s.baslik||s.url)}</b>
+        <span class="not">${sayi(kelimeler(s.duz).length)} kelime</span>
+        <button type="button" data-kopya="${i}">Kopyala</button></div>
+        <pre>${esc(s.md)}</pre></div>`).join("") : '<div class="bos">Yazı yok.</div>';
+    return;
+  }
+  const ogeler = [...S.medya.values()].filter(m=>m.kat===S.sekme);
+  if(!ogeler.length){ ic.innerHTML='<div class="bos">Bu türde içerik bulunamadı.</div>'; return; }
+  const liste = S.sekme!=="fotograflar";
+  ic.innerHTML = `<div class="izgara ${liste?"liste":""}">` + ogeler.map(m=>{
+    let on;
+    if (m.kat==="fotograflar") on = `<img loading="lazy" referrerpolicy="no-referrer" src="${esc(m.url)}">`;
+    else if (m.kat==="videolar" && !/\.m3u8/.test(m.url)) on = `<video preload="none" muted src="${esc(m.url)}"></video>`;
+    else on = SEKMELER[m.kat].ikon;
+    const ek = [m.en?`${m.en}×${m.boy}`:"", m.bayt>0?boyutYaz(m.bayt):"", (m.bicim||"").toUpperCase()].filter(Boolean).join(" · ");
+    return `<div class="oge"><div class="onizleme" data-buyut="${esc(m.url)}">${on}</div>
+      <div class="bilgi"><span class="ad">${esc(dosyaAdi(m.url))}</span>${ek?esc(ek)+" · ":""}<a href="${esc(m.url)}" target="_blank" rel="noopener noreferrer">aç ↗</a></div></div>`;
+  }).join("") + "</div>";
+}
+
+function analizHtml(){
+  if (!S.sayfalar.length) return '<div class="bos">Analiz için önce bir sayfa getir.</div>';
+  const t = metinAnalizi(), m = medyaAnalizi(), l = linkAnalizi();
+  const seolar = S.sayfalar.map(s=>({s, ...seoPuan(s.seo)}));
+  const ortPuan = Math.round(seolar.reduce((a,x)=>a+x.puan,0)/seolar.length);
+  let h = `<div class="satir" style="justify-content:flex-end;margin-bottom:10px">
+      <button type="button" id="raporKopyala">Raporu kopyala (Markdown)</button></div>
+    <div class="ozet">
+      <div><b>${sayi(S.sayfalar.length)}</b><span>sayfa</span></div>
+      <div><b>${sayi(t.kelime)}</b><span>kelime</span></div>
+      <div><b>${sayi(m.tur.fotograflar)}</b><span>fotoğraf</span></div>
+      <div><b>${sayi((m.tur.videolar||0)+(m.tur.sesler||0))}</b><span>video + ses</span></div>
+      <div><b>${sayi(m.tur.belgeler)}</b><span>belge</span></div>
+      <div><b>${sayi(l.icBenzersiz)} / ${sayi(l.disBenzersiz)}</b><span>iç / dış bağlantı</span></div>
+      <div><b class="${puanRenk(ortPuan)}">${ortPuan}</b><span>SEO puanı / 100</span></div>
+    </div>`;
+
+  // ------------------------------------------------ metin
+  h += `<h2 class="bolum">📝 Metin analizi</h2><div class="iki">
+    <div class="kutu"><h3>Genel</h3><table>
+      <tr><td>Toplam kelime</td><td class="n">${sayi(t.kelime)}</td></tr>
+      <tr><td>Farklı kelime</td><td class="n">${sayi(t.benzersiz)}</td></tr>
+      <tr><td>Kelime çeşitliliği</td><td class="n">${t.kelime?(t.benzersiz/t.kelime*100).toFixed(1):0}%</td></tr>
+      <tr><td>Karakter (boşluksuz)</td><td class="n">${sayi(t.karakter)}</td></tr>
+      <tr><td>Cümle</td><td class="n">${sayi(t.cumle)}</td></tr>
+      <tr><td>Ortalama cümle uzunluğu</td><td class="n">${t.ortCumle.toFixed(1)} kelime ${t.ortCumle>25?'<span class="uyari">(uzun)</span>':""}</td></tr>
+      <tr><td>Okuma süresi</td><td class="n">~${t.okuma} dk</td></tr>
+    </table>
+    ${S.sayfalar.length>1?`<h3 style="margin-top:14px">Sayfa başına kelime</h3>${cubuklar(t.sayfaBasina.map(p=>[p.baslik||dosyaAdi(p.url),p.kelime]).sort((a,b)=>b[1]-a[1]).slice(0,12))}`:""}
+    </div>
+    <div class="kutu"><h3>En sık geçen kelimeler</h3>${cubuklar(t.enSik)}</div>
+  </div>`;
+  if (t.ikili.length) h += `<div class="kutu" style="margin-top:14px"><h3>Sık geçen ikili ifadeler</h3>${t.ikili.map(([b,n])=>`<span class="rozet">${esc(b)} <b>${n}</b></span>`).join("")}</div>`;
+  h += `<div class="kutu" style="margin-top:14px"><h3>Başlık yapısı</h3><div class="kaydir">` + S.sayfalar.map(s=>`
+      ${S.sayfalar.length>1?`<div class="not" style="margin:8px 0 4px">${esc(s.baslik||s.url)}</div>`:""}
+      ${s.seo.basliklar.length?`<ul class="anahat">${s.seo.basliklar.map(b=>`<li style="padding-left:${(b.lv-1)*18}px"><span class="lv">H${b.lv}</span>${esc(b.t)}</li>`).join("")}</ul>`:'<div class="not">Başlık etiketi yok.</div>'}`).join("") + `</div></div>`;
+
+  // ------------------------------------------------ medya
+  h += `<h2 class="bolum">🖼️ Medya envanteri <small>${m.olculen}/${m.foto} görselin ölçüsü okundu</small></h2><div class="iki">
+    <div class="kutu"><h3>Türe göre</h3>${cubuklar(MEDYA_TURLERI.map(k=>[SEKMELER[k].ad, m.tur[k]||0]))}
+      <h3 style="margin-top:14px">Biçime göre</h3>${cubuklar(m.bicim.slice(0,10))}</div>
+    <div class="kutu"><h3>Görsel çözünürlüğü (uzun kenar)</h3>${cubuklar(m.aralik)}
+      <h3 style="margin-top:14px">Yön</h3>${cubuklar([["Yatay",m.yon.yatay],["Dikey",m.yon.dikey],["Kare",m.yon.kare]])}
+      ${m.kirik?`<p class="kotu" style="font-size:13px">${m.kirik} görsel yüklenemedi (kırık ya da engelli).</p>`:""}
+      ${m.ortak?`<p class="not">${m.ortak} medya birden fazla sayfada kullanılıyor.</p>`:""}</div>
+  </div>
+  <div class="kutu" style="margin-top:14px"><h3>Dosya boyutları</h3>`;
+  if (!m.boyutlu.length) h += `<p class="not">Boyutları ölçmek için her dosyanın indirilmesi gerekiyor (kaydedilmez, sadece byte sayılır). ${m.olculmedi} dosya.</p><button type="button" id="boyutOlc">Boyutları ölç</button>`;
+  else {
+    h += `<table><tr><td>Ölçülen dosya</td><td class="n">${sayi(m.boyutlu.length)}</td></tr><tr><td>Toplam ağırlık</td><td class="n">${boyutYaz(m.toplamBayt)}</td></tr>
+      <tr><td>Ortalama</td><td class="n">${boyutYaz(Math.round(m.toplamBayt/m.boyutlu.length))}</td></tr>
+      <tr><td>500 KB üstü görsel</td><td class="n ${m.boyutlu.filter(x=>x.kat==="fotograflar"&&x.bayt>512000).length?"uyari":""}">${m.boyutlu.filter(x=>x.kat==="fotograflar"&&x.bayt>512000).length}</td></tr>
+      ${m.olcumHata?`<tr><td>Ölçülemeyen</td><td class="n">${m.olcumHata}</td></tr>`:""}</table>
+      <h3 style="margin-top:14px">En ağır 10 dosya</h3>${cubuklar(m.enAgir.map(x=>[dosyaAdi(x.url)+(x.en?` (${x.en}×${x.boy})`:""), x.bayt]), "B")}
+      ${m.olculmedi?`<button type="button" id="boyutOlc" style="margin-top:10px">Kalan ${m.olculmedi} dosyayı ölç</button>`:""}`;
+  }
+  h += `</div>`;
+  if (m.gomulu.length) h += `<div class="kutu" style="margin-top:14px"><h3>Gömülü içerik (${m.gomulu.length})</h3>${cubuklar(Object.entries(m.gomulu.reduce((a,x)=>(a[x.bicim]=(a[x.bicim]||0)+1,a),{})).sort((a,b)=>b[1]-a[1]))}</div>`;
+
+  // ------------------------------------------------ SEO
+  h += `<h2 class="bolum">🔎 SEO ve erişilebilirlik</h2>`;
+  h += seolar.map(({s,puan,k})=>`<div class="kutu" style="margin-bottom:10px">
+      <h3 style="display:flex;gap:10px;align-items:center"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${esc(s.baslik||s.url)}</span><span class="${puanRenk(puan)}" style="font-size:18px">${puan}</span></h3>
+      <table>${k.map(([d,msg])=>`<tr><td style="width:22px">${ikonDurum(d)}</td><td>${esc(msg)}</td></tr>`).join("")}</table>
+      ${s.seo.aciklama?`<p class="not" style="margin:8px 0 0">Açıklama: “${esc(s.seo.aciklama)}”</p>`:""}
+      ${s.seo.altsiz.length?`<details><summary>Alt metni olmayan görseller</summary><div class="kaydir">${s.seo.altsiz.slice(0,50).map(u=>`<div class="not">${esc(u)}</div>`).join("")}</div></details>`:""}
+    </div>`).join("");
+
+  // ------------------------------------------------ bağlantılar
+  h += `<h2 class="bolum">🔗 Bağlantı analizi</h2><div class="iki">
+    <div class="kutu"><h3>Sayılar</h3><table>
+      <tr><td>İç bağlantı (toplam / farklı)</td><td class="n">${sayi(l.icToplam)} / ${sayi(l.icBenzersiz)}</td></tr>
+      <tr><td>Dış bağlantı (toplam / farklı)</td><td class="n">${sayi(l.disToplam)} / ${sayi(l.disBenzersiz)}</td></tr>
+      <tr><td>Farklı dış alan adı</td><td class="n">${sayi(new Set(l.disListe.map(([u])=>hostAl(u))).size)}</td></tr>
+      <tr><td>nofollow</td><td class="n">${sayi(l.nofollow)}</td></tr>
+      <tr><td>Metni olmayan bağlantı</td><td class="n ${l.bosMetin?"kotu":""}">${sayi(l.bosMetin)}</td></tr>
+      <tr><td>Yeni sekmede açılan</td><td class="n">${sayi(l.yeniSekme)}</td></tr>
+      <tr><td>…rel="noopener" olmadan</td><td class="n ${l.guvensizYeniSekme?"uyari":""}">${sayi(l.guvensizYeniSekme)}</td></tr>
+      <tr><td>E-posta / telefon bağlantısı</td><td class="n">${sayi(l.mailto)} / ${sayi(l.tel)}</td></tr>
+    </table>
+    <h3 style="margin-top:14px">En çok bağlantı verilen iç sayfalar</h3>${cubuklar(l.enCokIc.map(([u,n])=>[new URL(u).pathname||"/",n]))}</div>
+    <div class="kutu"><h3>En çok bağlantı verilen dış alan adları</h3>${cubuklar(l.alanlar)}</div>
+  </div>`;
+  if (l.disListe.length) h += `<details class="kutu" style="margin-top:14px"><summary>Tüm dış bağlantılar (${l.disListe.length})</summary><div class="kaydir" style="margin-top:8px">${l.disListe.map(([u,n])=>`<div style="font-size:13px"><a class="ince" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(u)}</a> <span class="not">×${n}</span></div>`).join("")}</div></details>`;
+  return h;
+}
+
+function raporMarkdown(){
+  const t = metinAnalizi(), m = medyaAnalizi(), l = linkAnalizi();
+  const r = [`# Site analizi: ${S.kaynak}`, `_${new Date().toLocaleString("tr-TR")}_`, "",
+    `## Özet`, `- Sayfa: ${S.sayfalar.length}`, `- Kelime: ${t.kelime} (farklı: ${t.benzersiz}), okuma ~${t.okuma} dk, ort. cümle ${t.ortCumle.toFixed(1)} kelime`,
+    `- Medya: ${MEDYA_TURLERI.map(k=>`${SEKMELER[k].ad.toLowerCase()} ${m.tur[k]||0}`).join(", ")}`,
+    m.boyutlu.length?`- Medya ağırlığı: ${boyutYaz(m.toplamBayt)} (${m.boyutlu.length} dosya ölçüldü)`:"",
+    `- Bağlantı: ${l.icBenzersiz} iç, ${l.disBenzersiz} dış, ${l.bosMetin} metinsiz`, "",
+    `## En sık kelimeler`, t.enSik.map(([w,n])=>`${w} (${n})`).join(", "), "",
+    `## SEO ve erişilebilirlik`];
+  S.sayfalar.forEach(s=>{ const p=seoPuan(s.seo); r.push(`### ${s.baslik||s.url} — ${p.puan}/100`, ...p.k.map(([d,msg])=>`- ${d==="iyi"?"✓":d==="uyari"?"!":"✗"} ${msg}`), ""); });
+  r.push(`## En çok bağlantı verilen dış alanlar`, ...l.alanlar.map(([a,n])=>`- ${a}: ${n}`));
+  return r.filter(x=>x!=="").join("\n");
+}
+
+// ================================================================ olaylar
+$("form").addEventListener("submit", baslat);
+$("durdur").onclick = () => { S.iptal = true; durum("Durduruluyor…"); };
+$("proxy").onchange = () => $("ozelSatir").style.display = $("proxy").value==="ozel" ? "" : "none";
+$("yapistirIsle").onclick = yapistirIsle;
+$("dosya").onchange = async e => { const f=e.target.files[0]; if(!f) return; $("yapistir").value = await f.text(); yapistirIsle(); };
+$("sekmeler").onclick = e => { const b=e.target.closest(".sekme"); if(!b) return; S.sekme=b.dataset.k; goster(); };
+$("icerik").addEventListener("click", e=>{
+  if (e.target.id === "boyutOlc") { boyutlariOlc(e.target); return; }
+  if (e.target.id === "raporKopyala") { navigator.clipboard?.writeText(raporMarkdown()).then(()=>{ e.target.textContent="Kopyalandı ✓"; setTimeout(()=>e.target.textContent="Raporu kopyala (Markdown)",1500); }).catch(()=>durum("Kopyalanamadı.",true)); return; }
+  if (e.target.dataset.kopya) { const s=S.sayfalar[+e.target.dataset.kopya]; navigator.clipboard?.writeText(s.md).then(()=>{e.target.textContent="Kopyalandı";setTimeout(()=>e.target.textContent="Kopyala",1200);}).catch(()=>{}); return; }
+  const b = e.target.closest("[data-buyut]");
+  if (b){ const m=S.medya.get(b.dataset.buyut); if(!m) return;
+    const bk=$("buyuk");
+    bk.innerHTML = m.kat==="fotograflar" ? `<img referrerpolicy="no-referrer" src="${esc(m.url)}">` : m.kat==="videolar" ? `<video controls autoplay src="${esc(m.url)}"></video>` : m.kat==="sesler" ? `<audio controls autoplay src="${esc(m.url)}"></audio>` : "";
+    if (bk.innerHTML) bk.style.display="flex";
+  }
+});
+$("buyuk").onclick = e => { if(e.target.id==="buyuk"||e.target.tagName==="IMG"){ $("buyuk").style.display="none"; $("buyuk").innerHTML=""; } };
+</script>
+</body>
+</html>
