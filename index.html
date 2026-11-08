@@ -106,13 +106,13 @@
       <div class="ayarlar">
         <label><input type="checkbox" id="gez"> Aynı sitedeki bağlantıları da gez</label>
         <label>En fazla <input type="number" id="maxSayfa" value="10" min="1" max="500"> sayfa</label>
-        <label>Sayfalar arası bekleme <input type="number" id="bekleme" value="700" min="0" step="100"> ms</label>
+        <label>Sayfalar arası bekleme <input type="number" id="bekleme" value="3000" min="0" step="500"> ms</label>
         <label>Aracı (CORS proxy)
           <select id="proxy">
             <option value="oto">Otomatik (sırayla dene)</option>
             <option value="dogrudan">Doğrudan (proxy yok)</option>
+            <option value="jina">r.jina.ai (sayfalar için)</option>
             <option value="allorigins">allorigins.win</option>
-            <option value="corsproxy">corsproxy.io</option>
             <option value="codetabs">codetabs.com</option>
             <option value="ozel">Kendi proxy'm…</option>
           </select>
@@ -162,16 +162,17 @@ const UZ = {
   sesler:["mp3","wav","ogg","oga","m4a","aac","flac","opus"],
   belgeler:["pdf","doc","docx","xls","xlsx","ppt","pptx","odt","ods","csv","zip","rar","7z","epub"],
 };
+// her aracı: [adres, fetch seçenekleri, sadece metin mi]
 const PROXYLER = {
-  allorigins: u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
-  corsproxy:  u => "https://corsproxy.io/?url=" + encodeURIComponent(u),
-  codetabs:   u => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u),
+  jina:       u => ["https://r.jina.ai/" + u, {headers:{"X-Return-Format":"html"}}, true],
+  allorigins: u => ["https://api.allorigins.win/raw?url=" + encodeURIComponent(u), {}, false],
+  codetabs:   u => ["https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u), {}, false],
 };
 const DURAK = new Set(("ve veya ile bir bu şu o da de ki mi mı mu mü için gibi kadar çok daha en her hem ama fakat ancak ise ne nasıl neden niye olan olarak olduğu olur oldu olan olmak var yok değil diye sonra önce göre karşı bazı tüm bütün hiç şey şeyi şekilde ben sen biz siz onlar bunu bunun buna şunu onu onun ona bizim sizin benim senin çünkü yani ayrıca yine artık sadece bile zaten hep böyle şöyle öyle burada orada içinde üzerinde arasında tarafından ilgili kendi kendini aynı birlikte ya veya da yada şimdi daha olarak gibi değildir ediyor eden etmek etti yapılan yapmak " +
   "the a an and or of to in on for is are was were be been with as by at it its this that these those from not but have has had you your we our they their he she his her them i me my can will would should could about into than then there here what which who when where how all any more most other some such no yes do does did just also only over after before up out if so").split(/\s+/));
 
 // ================================================================ durum
-const S = { sayfalar:[], medya:new Map(), sekme:"analiz", iptal:false, calisanProxy:null, kaynak:"" };
+const S = { sayfalar:[], medya:new Map(), sekme:"analiz", iptal:false, calisanProxy:{}, kaynak:"" };
 const $ = id => document.getElementById(id);
 function durum(m, hata=false){ const d=$("durum"); d.textContent=m; d.className=hata?"hata":""; }
 function logla(m){ const l=$("log"); l.textContent += m + "\n"; l.scrollTop = l.scrollHeight; }
@@ -184,30 +185,32 @@ function dosyaAdi(u){ try{ return decodeURIComponent(new URL(u).pathname.split("
 function hostAl(u){ try{ return new URL(u).host.replace(/^www\./,""); }catch{ return ""; } }
 
 // ================================================================ ağ
-function proxySirasi(){
+function proxySirasi(tur){
   const sec = $("proxy").value;
-  if (sec === "dogrudan" || sec === "ozel") return [sec];
   if (sec !== "oto") return [sec];
-  const sira = ["dogrudan","allorigins","corsproxy","codetabs"];
-  if (S.calisanProxy) { sira.splice(sira.indexOf(S.calisanProxy),1); sira.unshift(S.calisanProxy); }
+  const sira = ["dogrudan","jina","allorigins","codetabs"];
+  const onceki = S.calisanProxy[tur];
+  if (onceki) { sira.splice(sira.indexOf(onceki),1); sira.unshift(onceki); }
   return sira;
 }
 function proxyUrl(ad, u){
-  if (ad === "dogrudan") return u;
-  if (ad === "ozel") return ($("ozelProxy").value || "") + encodeURIComponent(u);
+  if (ad === "dogrudan") return [u, {}, false];
+  if (ad === "ozel") return [($("ozelProxy").value || "") + encodeURIComponent(u), {}, false];
   return PROXYLER[ad](u);
 }
 async function getir(u, tur){
   let sonHata;
-  for (const ad of proxySirasi()){
+  for (const ad of proxySirasi(tur)){
+    const [adres, secenek, sadeceMetin] = proxyUrl(ad, u);
+    if (sadeceMetin && tur !== "text") continue;
     try{
-      const ctrl = new AbortController(); const t = setTimeout(()=>ctrl.abort(), 30000);
-      const y = await fetch(proxyUrl(ad,u), {signal:ctrl.signal, credentials:"omit"});
+      const ctrl = new AbortController(); const t = setTimeout(()=>ctrl.abort(), ad==="dogrudan" ? 10000 : 25000);
+      const y = await fetch(adres, {...secenek, signal:ctrl.signal, credentials:"omit"});
       clearTimeout(t);
       if (!y.ok) throw new Error("HTTP " + y.status);
       const veri = tur === "text" ? await y.text() : await y.blob();
-      S.calisanProxy = ad;
-      return {veri, tip:y.headers.get("content-type")||""};
+      S.calisanProxy[tur] = ad;
+      return {veri, tip: ad==="jina" ? "text/html" : (y.headers.get("content-type")||"")};
     }catch(e){ sonHata = e; }
   }
   throw new Error(sonHata && sonHata.name==="AbortError" ? "zaman aşımı" : (sonHata && sonHata.message || "bilinmeyen hata"));
@@ -406,7 +409,7 @@ async function olculeriOku(){
       });
     }
   }));
-  if (fotolar.length) durum(`${S.sayfalar.length} sayfa, ${S.medya.size} medya analiz edildi.`);
+  if (S.sayfalar.length && !$("durum").classList.contains("hata")) durum(`${S.sayfalar.length} sayfa, ${S.medya.size} medya analiz edildi.`);
   if (S.sekme==="analiz" || S.sekme==="fotograflar") ciz();
 }
 
@@ -451,6 +454,46 @@ function metinAnalizi(){
     sayfaBasina: S.sayfalar.map(s=>({url:s.url, baslik:s.baslik, kelime:kelimeler(s.duz).length})),
   };
 }
+// ---------------------------------------------------------------- yer adları
+// "Kanonik ad|diğer yazılış|..."  — büyük harfle başlayan özel ad olarak aranır, Ankara'da / Ankara'nın gibi ekleri yakalar
+const YERLER = {
+  il: "Adana|Adıyaman|Afyonkarahisar,Afyon|Ağrı|Aksaray|Amasya|Ankara|Antalya|Ardahan|Artvin|Aydın|Balıkesir|Bartın|Batman|Bayburt|Bilecik|Bingöl|Bitlis|Bolu|Burdur|Bursa|Çanakkale|Çankırı|Çorum|Denizli|Diyarbakır|Düzce|Edirne|Elazığ|Erzincan|Erzurum|Eskişehir|Gaziantep,Antep|Giresun|Gümüşhane|Hakkari|Hatay|Iğdır|Isparta|İstanbul,Istanbul|İzmir,Izmir|Kahramanmaraş,Maraş|Karabük|Karaman|Kars|Kastamonu|Kayseri|Kilis|Kırıkkale|Kırklareli|Kırşehir|Kocaeli,İzmit|Konya|Kütahya|Malatya|Manisa|Mardin|Mersin|Muğla|Muş|Nevşehir|Niğde|Ordu|Osmaniye|Rize|Sakarya,Adapazarı|Samsun|Şanlıurfa,Urfa|Siirt|Sinop|Sivas|Şırnak|Tekirdağ|Tokat|Trabzon|Tunceli|Uşak|Van|Yalova|Yozgat|Zonguldak",
+  ulke: "Türkiye,Turkey,Türkiye Cumhuriyeti|Almanya,Germany|Fransa,France|Birleşik Krallık,İngiltere,United Kingdom,England,Britain|ABD,Amerika,Amerika Birleşik Devletleri,United States,USA|Rusya,Russia|Çin,China|Japonya,Japan|İtalya,Italy|İspanya,Spain|Yunanistan,Greece|Hollanda,Netherlands|Belçika,Belgium|İsviçre,Switzerland|Avusturya,Austria|İsveç,Sweden|Norveç,Norway|Danimarka,Denmark|Polonya,Poland|Ukrayna,Ukraine|Azerbaycan,Azerbaijan|Gürcistan|İran,Iran|Irak,Iraq|Suriye,Syria|İsrail,Israel|Filistin,Palestine|Mısır,Egypt|Suudi Arabistan,Saudi Arabia|Katar,Qatar|Birleşik Arap Emirlikleri,BAE,UAE|Hindistan,India|Pakistan|Kanada,Canada|Meksika,Mexico|Brezilya,Brazil|Arjantin,Argentina|Avustralya,Australia|Kıbrıs,KKTC,Cyprus|Bulgaristan,Bulgaria|Romanya,Romania|Kazakistan,Kazakhstan|Özbekistan,Uzbekistan|Türkmenistan|Kırgızistan|Güney Kore,South Korea|Endonezya,Indonesia|Portekiz,Portugal|İrlanda,Ireland|Finlandiya,Finland|Macaristan,Hungary|Çekya,Czechia|Sırbistan,Serbia|Bosna Hersek,Bosnia|Arnavutluk,Albania|Lübnan,Lebanon|Ürdün|Fas,Morocco|Tunus,Tunisia|Cezayir,Algeria|Libya|Nijerya,Nigeria|Güney Afrika,South Africa",
+  sehir: "Londra,London|Paris|Berlin|Moskova,Moscow|New York|Los Angeles|Washington|Tokyo|Pekin,Beijing|Şanghay,Shanghai|Dubai|Roma,Rome|Madrid|Barselona,Barcelona|Amsterdam|Brüksel,Brussels|Viyana,Vienna|Atina,Athens|Bakü,Baku|Tahran,Tehran|Bağdat,Baghdad|Kahire,Cairo|Kudüs,Jerusalem|Münih,Munich|Frankfurt|Hamburg|Köln,Cologne|Milano,Milan|Lefkoşa,Nicosia|Kiev,Kyiv|Varşova,Warsaw|Prag,Prague|Budapeşte,Budapest|Stockholm|Oslo|Kopenhag,Copenhagen|Toronto|Sidney,Sydney|Singapur,Singapore|Hong Kong|Seul,Seoul|Mumbai|Delhi|İslamabad|Riyad,Riyadh|Doha|Abu Dabi,Abu Dhabi|Tiflis,Tbilisi|Saraybosna,Sarajevo|Üsküp,Skopje|Selanik,Thessaloniki|San Francisco|Chicago|Miami|Las Vegas|Rio de Janeiro|Buenos Aires|Erbil|Halep,Aleppo|Batum,Batumi",
+};
+// başka anlamı da olan adlar (Aydın kişi adı, Ordu = asker, Van, Batman…) raporda işaretlenir
+const BELIRSIZ = new Set(["Aydın","Ordu","Van","Batman","Washington","Fas","Amerika","Kars"]);
+const YER_DESEN = (() => {
+  const kac = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const out = [];
+  for (const [tur, liste] of Object.entries(YERLER))
+    for (const grup of liste.split("|")) {
+      const formlar = grup.split(",");
+      const tum = [...new Set(formlar.flatMap(f => [f, f.toLocaleUpperCase("tr")]))];
+      out.push({ tur, ad: formlar[0], re: new RegExp(`(?<![\\p{L}\\p{N}])(?:${tum.map(kac).join("|")})(?![\\p{L}\\p{N}])`, "gu") });
+    }
+  return out;
+})();
+function yerAnalizi(){
+  const sonuc = { il: [], ulke: [], sehir: [] }, etiket = new Map();
+  for (const y of YER_DESEN) {
+    let toplam = 0, sayfa = 0;
+    for (const s of S.sayfalar) {
+      const n = (s.duz.match(y.re) || []).length + (s.baslik.match(y.re) || []).length;
+      toplam += n; if (n) sayfa++;
+    }
+    if (toplam) sonuc[y.tur].push([y.ad + (BELIRSIZ.has(y.ad) ? " (?)" : ""), toplam, sayfa]);
+  }
+  for (const k in sonuc) sonuc[k].sort((a, b) => b[1] - a[1]);
+  for (const s of S.sayfalar)
+    for (const m of s.duz.matchAll(/(?<![\p{L}\p{N}&])#([\p{L}][\p{L}\p{N}_]{1,49})/gu)) {
+      const e = "#" + m[1].toLocaleLowerCase("tr"); etiket.set(e, (etiket.get(e) || 0) + 1);
+    }
+  sonuc.etiketler = [...etiket.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30);
+  sonuc.toplam = sonuc.il.length + sonuc.ulke.length + sonuc.sehir.length;
+  return sonuc;
+}
+
 function medyaAnalizi(){
   const tum = [...S.medya.values()].filter(m=>m.kat!=="gomulu");
   const tur = {}, bicim = {};
@@ -568,6 +611,19 @@ function analizHtml(){
       <div><b class="${puanRenk(ortPuan)}">${ortPuan}</b><span>SEO puanı / 100</span></div>
     </div>`;
 
+  // ------------------------------------------------ kelimeler ve yer adları
+  const y = yerAnalizi();
+  const yerKutu = (baslik, dizi) => `<div class="kutu"><h3>${baslik} <span style="font-weight:400">(${dizi.length})</span></h3>${dizi.length ? cubuklar(dizi.slice(0,15).map(([a,n])=>[a,n])) : '<div class="not">Geçmiyor.</div>'}</div>`;
+  h += `<h2 class="bolum">📍 Kelimeler ve yer adları <small>metinde geçme sayısı</small></h2>
+    <div class="iki">
+      <div class="kutu"><h3>En sık kelimeler</h3>${cubuklar(t.enSik)}</div>
+      ${yerKutu("Türkiye illeri", y.il)}
+      ${yerKutu("Ülkeler", y.ulke)}
+      ${yerKutu("Dünya şehirleri", y.sehir)}
+      <div class="kutu"><h3>#Etiketler <span style="font-weight:400">(${y.etiketler.length})</span></h3>${y.etiketler.length ? y.etiketler.map(([e,n])=>`<span class="rozet">${esc(e)} <b>${n}</b></span>`).join("") : '<div class="not">Etiket yok.</div>'}</div>
+    </div>
+    ${y.toplam ? `<p class="not">(?) işaretliler başka anlamda da kullanılabilir (ör. Aydın kişi adı, Ordu ‘asker’). ${S.sayfalar.length>1?"Birden çok sayfada geçenler: "+[...y.il,...y.ulke,...y.sehir].filter(x=>x[2]>1).map(x=>`${esc(x[0])} (${x[2]} sayfa)`).join(", ") || "yok":""}</p>` : ""}`;
+
   // ------------------------------------------------ metin
   h += `<h2 class="bolum">📝 Metin analizi</h2><div class="iki">
     <div class="kutu"><h3>Genel</h3><table>
@@ -581,9 +637,8 @@ function analizHtml(){
     </table>
     ${S.sayfalar.length>1?`<h3 style="margin-top:14px">Sayfa başına kelime</h3>${cubuklar(t.sayfaBasina.map(p=>[p.baslik||dosyaAdi(p.url),p.kelime]).sort((a,b)=>b[1]-a[1]).slice(0,12))}`:""}
     </div>
-    <div class="kutu"><h3>En sık geçen kelimeler</h3>${cubuklar(t.enSik)}</div>
+    <div class="kutu"><h3>Sık geçen ikili ifadeler</h3>${t.ikili.length ? t.ikili.map(([b,n])=>`<span class="rozet">${esc(b)} <b>${n}</b></span>`).join("") : '<div class="not">Tekrar eden ikili ifade yok.</div>'}</div>
   </div>`;
-  if (t.ikili.length) h += `<div class="kutu" style="margin-top:14px"><h3>Sık geçen ikili ifadeler</h3>${t.ikili.map(([b,n])=>`<span class="rozet">${esc(b)} <b>${n}</b></span>`).join("")}</div>`;
   h += `<div class="kutu" style="margin-top:14px"><h3>Başlık yapısı</h3><div class="kaydir">` + S.sayfalar.map(s=>`
       ${S.sayfalar.length>1?`<div class="not" style="margin:8px 0 4px">${esc(s.baslik||s.url)}</div>`:""}
       ${s.seo.basliklar.length?`<ul class="anahat">${s.seo.basliklar.map(b=>`<li style="padding-left:${(b.lv-1)*18}px"><span class="lv">H${b.lv}</span>${esc(b.t)}</li>`).join("")}</ul>`:'<div class="not">Başlık etiketi yok.</div>'}`).join("") + `</div></div>`;
@@ -646,6 +701,8 @@ function raporMarkdown(){
     m.boyutlu.length?`- Medya ağırlığı: ${boyutYaz(m.toplamBayt)} (${m.boyutlu.length} dosya ölçüldü)`:"",
     `- Bağlantı: ${l.icBenzersiz} iç, ${l.disBenzersiz} dış, ${l.bosMetin} metinsiz`, "",
     `## En sık kelimeler`, t.enSik.map(([w,n])=>`${w} (${n})`).join(", "), "",
+    ...(()=>{ const y=yerAnalizi(); const f=d=>d.length?d.map(([a,n])=>`${a} (${n})`).join(", "):"—";
+      return [`## Yer adları`, `- İller: ${f(y.il)}`, `- Ülkeler: ${f(y.ulke)}`, `- Dünya şehirleri: ${f(y.sehir)}`, `- Etiketler: ${y.etiketler.map(([e,n])=>`${e} (${n})`).join(", ")||"—"}`, ""]; })(),
     `## SEO ve erişilebilirlik`];
   S.sayfalar.forEach(s=>{ const p=seoPuan(s.seo); r.push(`### ${s.baslik||s.url} — ${p.puan}/100`, ...p.k.map(([d,msg])=>`- ${d==="iyi"?"✓":d==="uyari"?"!":"✗"} ${msg}`), ""); });
   r.push(`## En çok bağlantı verilen dış alanlar`, ...l.alanlar.map(([a,n])=>`- ${a}: ${n}`));
